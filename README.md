@@ -1,34 +1,37 @@
 # Chef IA — automatisation n8n
 
-Ce dépôt contient l’automatisation qui génère chaque semaine un menu adapté à une perte de poids à partir des recettes stockées dans Notion.
+Ce dépôt contient l’automatisation qui génère chaque semaine un menu adapté à une perte de poids, l’écrit dans Notion, crée la liste de courses et envoie un récapitulatif par Gmail.
 
 ## État du projet
 
 - ✅ Bases Notion : Recettes, Menus hebdomadaires, Courses, Paramètres
 - ✅ Première bibliothèque de recettes
 - ✅ Configuration Notion centralisée
-- ✅ Workflow n8n v0.1 importable
 - ✅ Lecture des paramètres et recettes validées
 - ✅ Génération d’un menu JSON structuré avec OpenAI
-- ⏳ Écriture automatique dans Menus et Courses — v0.2
-- ⏳ Envoi Gmail — v0.2
+- ✅ Création du menu dans Notion — v0.2.0
+- ✅ Création de la liste de courses liée — v0.2.0
+- ✅ Envoi Gmail — v0.2.0
 - ⏳ Génération unique des affiches des nouvelles recettes — version ultérieure
 
-## Importer le workflow v0.1
+## Version stable de lecture
 
-1. Ouvre le fichier [`workflow/Chef-IA-v0.1.json`](workflow/Chef-IA-v0.1.json) dans GitHub.
-2. Clique sur **Download raw file** ou télécharge le dépôt en ZIP.
-3. Ouvre n8n sur `http://localhost:5678`.
-4. Dans le workflow **Chef IA**, clique sur `…` puis **Import from File**.
-5. Importe `Chef-IA-v0.1.json`.
-6. Dans les deux nœuds Notion, sélectionne le credential **Notion account**.
-7. Dans le nœud OpenAI, sélectionne le credential **OpenAI account**.
-8. Clique sur **Execute workflow**.
-9. Ouvre le dernier nœud **Menu JSON final** pour voir le résultat.
+`workflow/Chef-IA-v0.1.4.json`
 
-Le workflow comprend aussi un déclencheur automatique chaque samedi à 08:00, mais il reste désactivé jusqu’à la validation du test manuel.
+Cette version lit Notion et génère uniquement le menu JSON. Elle a été validée dans n8n 2.29.10.
 
-## Ce que fait la v0.1
+## Importer la v0.2.0
+
+1. Télécharge [`workflow/Chef-IA-v0.2.0.json`](workflow/Chef-IA-v0.2.0.json).
+2. Dans n8n, utilise `…` puis **Import from File**.
+3. Dans les quatre nœuds Notion HTTP, sélectionne **Notion Header Auth**.
+4. Dans **Générer le menu**, sélectionne **OpenAI account**.
+5. Dans **Envoyer le mail Gmail**, connecte ton compte Gmail.
+6. Lance d’abord le workflow depuis **Test manuel**.
+7. Vérifie qu’une entrée apparaît dans **Menus hebdomadaires**, qu’une entrée liée apparaît dans **Courses**, puis que le mail est reçu.
+8. Active ensuite le workflow pour l’exécution automatique du samedi à 08:00.
+
+## Ce que fait la v0.2.0
 
 ```text
 Test manuel ou samedi 08:00
@@ -37,14 +40,14 @@ Lire la configuration active dans Notion
         ↓
 Lire les recettes validées
         ↓
-Construire une demande structurée
+Générer le menu avec OpenAI
         ↓
-Appeler l’API OpenAI Responses
+Créer la semaine dans Menus hebdomadaires
         ↓
-Retourner un menu JSON exploitable
+Créer la liste dans Courses et la relier au menu
+        ↓
+Envoyer le récapitulatif par Gmail
 ```
-
-La v0.1 ne modifie pas encore les bases Menus/Courses et n’envoie pas encore d’e-mail. Cette séparation permet de valider d’abord la sélection des recettes et le format JSON avant d’autoriser les écritures automatiques.
 
 ## Bases Notion utilisées
 
@@ -53,12 +56,7 @@ La v0.1 ne modifie pas encore les bases Menus/Courses et n’envoie pas encore d
 - Menus hebdomadaires : `673f346f-7fd8-4a0b-b4eb-f7770918375e`
 - Courses : `72bd3658-ebe1-41cd-bdd0-eb6bcd7cbc90`
 
-Les identifiants de sources de données et les propriétés sont documentés dans [`notion/schema.md`](notion/schema.md).
-
-## Prompts
-
-- [`prompts/menu.md`](prompts/menu.md) : règles de génération du menu.
-- [`prompts/image.md`](prompts/image.md) : charte des affiches de recettes.
+Les sources de données et propriétés sont documentées dans [`notion/schema.md`](notion/schema.md).
 
 ## Sécurité
 
