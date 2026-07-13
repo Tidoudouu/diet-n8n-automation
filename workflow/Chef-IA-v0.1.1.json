@@ -1,0 +1,148 @@
+{
+  "name": "Chef IA v0.1.1",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "0ee4dcf8-f5b1-49e5-8c47-a0aef966416d",
+      "name": "Test manuel",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-760, -80]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 6"
+            }
+          ]
+        }
+      },
+      "id": "d8f4d4ca-2d80-45f3-8cda-74f6c47e6f8e",
+      "name": "Chaque samedi à 08h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-760, 120]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/782e91be-e6ee-49c6-b645-5dd1faadbe4a/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Notion-Version", "value": "2022-06-28" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\"filter\":{\"property\":\"Actif\",\"checkbox\":{\"equals\":true}},\"page_size\":1}",
+        "options": {}
+      },
+      "id": "a20f4e42-fc6e-4f17-83b6-22cb4dbb46ff",
+      "name": "Lire paramètres",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-500, 20],
+      "credentials": {
+        "notionApi": { "name": "Notion account" }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/9321554a-c670-44a3-9c9a-54e7ef5fb863/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Notion-Version", "value": "2022-06-28" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\"filter\":{\"property\":\"Validée\",\"checkbox\":{\"equals\":true}},\"page_size\":100}",
+        "options": {}
+      },
+      "id": "3453e5f7-c08d-4b92-a415-0fb3e38d3188",
+      "name": "Lire recettes validées",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-250, 20],
+      "credentials": {
+        "notionApi": { "name": "Notion account" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const configPage = $node['Lire paramètres'].json.results?.[0];\nif (!configPage) throw new Error('Aucune configuration active trouvée dans Notion.');\n\nconst p = configPage.properties;\nconst config = {\n  personnes: p['Personnes']?.number ?? 2,\n  objectif: p['Objectif']?.select?.name ?? 'Perte de poids',\n  calories: p['Calories cibles']?.number ?? 2200,\n  budget: p['Budget hebdomadaire']?.number ?? 90,\n  email: p['Email']?.email ?? 'jasonmarmignon@gmail.com',\n  nouvelles_recettes_max: p['Nouvelles recettes max']?.number ?? 1,\n  saison: p['Saison']?.select?.name ?? 'Automatique',\n  jours: (p['Jours de cuisine']?.multi_select ?? []).map(x => x.name)\n};\n\nconst recipes = ($json.results ?? []).map(page => {\n  const r = page.properties;\n  return {\n    id: page.id,\n    nom: r['Nom']?.title?.map(x => x.plain_text).join('') ?? '',\n    type: r['Type']?.select?.name ?? '',\n    saisons: (r['Saison']?.multi_select ?? []).map(x => x.name),\n    calories: r['Calories par portion']?.number ?? null,\n    proteines: r['Protéines (g)']?.number ?? null,\n    note: r['Note']?.number ?? null,\n    portions: r['Portions']?.number ?? 2,\n    ingredients: r['Ingrédients']?.rich_text?.map(x => x.plain_text).join('') ?? '',\n    preparation: r['Préparation']?.rich_text?.map(x => x.plain_text).join('') ?? ''\n  };\n}).filter(r => r.nom);\n\nif (!recipes.length) throw new Error('Aucune recette validée trouvée dans Notion.');\n\nconst system = `Tu es le chef personnel de Jason. Compose un menu hebdomadaire simple et adapté à une perte de poids. Utilise uniquement les recettes existantes fournies. Évite poisson, quinoa, brocoli, épinards et choux de Bruxelles. Retourne uniquement le JSON demandé.`;\nconst user = `CONFIGURATION\\n${JSON.stringify(config, null, 2)}\\n\\nRECETTES VALIDÉES\\n${JSON.stringify(recipes, null, 2)}\\n\\nCrée un repas pour chaque jour configuré. Le nom de chaque recette doit correspondre exactement à un nom fourni. Fusionne les ingrédients dans une liste de courses classée par rayon.`;\n\nreturn [{ json: { config, recipes, openai_body: {\n  model: 'gpt-5-mini',\n  input: [\n    { role: 'system', content: [{ type: 'input_text', text: system }] },\n    { role: 'user', content: [{ type: 'input_text', text: user }] }\n  ],\n  text: { format: {\n    type: 'json_schema',\n    name: 'weekly_menu',\n    strict: true,\n    schema: {\n      type: 'object',\n      additionalProperties: false,\n      required: ['week_start','summary','meals','shopping','estimated_weekly_budget_eur','notes'],\n      properties: {\n        week_start: { type: 'string' },\n        summary: { type: 'string' },\n        meals: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['day','recipe_name','is_new','reason'], properties: { day:{type:'string'}, recipe_name:{type:'string'}, is_new:{type:'boolean'}, reason:{type:'string'} } } },\n        shopping: { type: 'object', additionalProperties: false, required: ['fruits_legumes','viandes_proteines','produits_frais','epicerie','surgeles','autres'], properties: { fruits_legumes:{type:'array',items:{type:'string'}}, viandes_proteines:{type:'array',items:{type:'string'}}, produits_frais:{type:'array',items:{type:'string'}}, epicerie:{type:'array',items:{type:'string'}}, surgeles:{type:'array',items:{type:'string'}}, autres:{type:'array',items:{type:'string'}} } },\n        estimated_weekly_budget_eur: { type: 'number' },\n        notes: { type: 'array', items: { type: 'string' } }\n      }\n    }\n  } }\n} } }];"
+      },
+      "id": "aaf2932c-4637-432c-9cb0-27a7a652d0b7",
+      "name": "Préparer la demande",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 20]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.openai_body) }}",
+        "options": {}
+      },
+      "id": "b69976cc-d86d-49f8-a805-d69bbb512be4",
+      "name": "Générer le menu",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, 20],
+      "credentials": {
+        "openAiApi": { "name": "OpenAI account" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.output_text ?? $json.output?.flatMap(o => o.content ?? []).find(c => c.type === 'output_text')?.text;\nif (!raw) throw new Error('OpenAI n’a retourné aucun texte exploitable.');\nlet menu;\ntry { menu = JSON.parse(raw); } catch (e) { throw new Error('La réponse OpenAI n’est pas un JSON valide : ' + raw); }\nreturn [{ json: menu }];"
+      },
+      "id": "95ce7aa8-931e-4fa2-b5ec-ea9f4e1854b8",
+      "name": "Menu JSON final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 20]
+    }
+  ],
+  "connections": {
+    "Test manuel": { "main": [[{ "node": "Lire paramètres", "type": "main", "index": 0 }]] },
+    "Chaque samedi à 08h": { "main": [[{ "node": "Lire paramètres", "type": "main", "index": 0 }]] },
+    "Lire paramètres": { "main": [[{ "node": "Lire recettes validées", "type": "main", "index": 0 }]] },
+    "Lire recettes validées": { "main": [[{ "node": "Préparer la demande", "type": "main", "index": 0 }]] },
+    "Préparer la demande": { "main": [[{ "node": "Générer le menu", "type": "main", "index": 0 }]] },
+    "Générer le menu": { "main": [[{ "node": "Menu JSON final", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Brussels"
+  },
+  "active": false,
+  "tags": []
+}
